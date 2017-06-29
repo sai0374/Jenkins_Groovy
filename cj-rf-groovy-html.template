@@ -1,0 +1,154 @@
+<STYLE>
+
+#builds {
+    font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+    border-collapse: collapse;
+}
+
+#builds, #builds th {
+    border: 1px solid #ddd;
+    text-align: left;
+    padding: 8px;
+}
+
+#builds tr:nth-child(even){background-color: #f2f2f2}
+
+#builds tr:hover {background-color: #e6f9ff}
+
+#builds th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    background-color: #0099cc;
+    color: white;
+}
+
+BODY, P {
+  font-family:Verdana,Helvetica,sans serif;
+  font-size:11px;
+  color:black;
+}
+
+h1 { color:black; }
+h2 { color:black; }
+h3 { color:black; }
+TD.bg1 { color:white; background-color:#0089b3; font-size:120% }
+TD.bg2 { color:white; background-color:#00bfff; font-size:110% }
+TD.bg3 { color:white; background-color:#99e6ff; }
+TD.build_passed { color:green; }
+TD.build_failed { color:red; }
+TD.build_unstable { color:yellow; }
+TD.test_passed { color:blue; }
+TD.test_failed { color:red; }
+TD.console { font-family:Courier New; }
+</STYLE>
+<BODY>
+
+<%
+def resolver = build.buildVariableResolver
+%>
+
+
+
+<% def build_job = null
+   def build = null
+
+   try {
+		build_job = hudson.model.Hudson.instance.getItem(resolver.resolve("BUILD_PROJECT_NAME"))
+		build=build_job.getBuildByNumber(resolver.resolve("BUILD_BUILD_NUMBER").toInteger())
+   } catch(e){}
+%>
+
+<% def deploy_job = null
+   def deploy = null
+
+   try {
+		deploy_job = hudson.model.Hudson.instance.getItem(resolver.resolve("DEPLOY_PROJECT_NAME"))
+		deploy=deploy_job.getBuildByNumber(resolver.resolve("DEPLOY_BUILD_NUMBER").toInteger())
+   } catch(e){}
+%>
+
+<% def test_job = null
+   def test = null
+
+   try {
+		test_job = hudson.model.Hudson.instance.getItem(resolver.resolve("SMOKE_PROJECT_NAME"))
+		test=test_job.getBuildByNumber(resolver.resolve("SMOKE_BUILD_NUMBER").toInteger())
+	} catch(e){}
+%>
+
+<% def numChanges = 0
+if(build != null && build.changeSet != null) {
+	def hadChanges = false
+    build.changeSet.each() { cs ->
+		hadChanges = true
+		numChanges += 1
+	}
+}
+
+
+ def deploySummary = ""
+ if(deploy != null && deploy.result==hudson.model.Result.SUCCESS) {
+ 	deploy.getLog(100).each() { line ->
+      if(line.contains("Hybris started successfully")) {
+	     deploySummary = "Hybris started successfully"
+	  }
+    }
+ }
+
+ def testSummary = ""
+ if(test != null) {
+ 	test.getLog(100).each() { line ->
+      if(line.startsWith("Tests run")) {
+	     testSummary = line
+	  }
+    }
+ }
+%>
+
+
+
+<TABLE id="builds" width="60%">
+  <TR><TH>PROJECT</TH><TH>STATUS</TH><TH>DURATION</TH><TH>SUMMARY</TH></TR>
+<% if(build != null) { %>
+  <TR><TD><A href="${rooturl}${build.url}/console">Build</A></TD><TD valign="center" class=<%= build.result.toString() == 'SUCCESS' ? 'build_passed' : build.result.toString() == 'FAILURE' ? 'build_failed' : 'build_unstable' %>>${build.result}</TD><TD>${build.durationString}</TD><TD>commit: <%=resolver.resolve('NEW_COMMIT_ID') %> <BR>previous: <%=resolver.resolve('OLD_COMMIT_ID')%></TD></TR>
+<% } %>
+<% if(deploy != null) { %>
+  <TR><TD><A href="${rooturl}${deploy.url}/console">Deployment</A></TD><TD valign="center" class=<%= deploy.result.toString() == 'SUCCESS' ? 'build_passed' : deploy.result.toString() == 'FAILURE' ? 'build_failed' : 'build_unstable' %>>${deploy.result}</TD><TD>${deploy.durationString}</TD><TD><%= deploySummary%></TD></TR>
+<% } %>
+<% if(test != null) { %>
+  <TR><TD><A href="${rooturl}${test.url}/console">Smoke Test</A></TD><TD valign="center" class=<%= test.result.toString() == 'SUCCESS' ? 'build_passed' : test.result.toString() == 'FAILURE' ? 'build_failed' : 'build_unstable' %>>${test.result}</TD><TD>${test.durationString}</TD><TD><%= testSummary%></TD></TR>
+<% } %>
+
+  </TABLE>
+<BR/>
+
+
+
+<!-- CHANGE SET -->
+<% if(build != null) { %>
+<% def changeSet = build.changeSet
+if(changeSet != null) {
+	def hadChanges = false %>
+	<TABLE width="100%">
+    <TR><TD class="bg1" colspan="2"><B>CHANGES FOR BUILD </B></TD></TR>
+<% 	changeSet.each() { cs ->
+		hadChanges = true %>
+      <TR>
+        <TD colspan="2">&nbsp;&nbsp;Revision <B><%= cs.metaClass.hasProperty('commitId') ? cs.commitId : cs.metaClass.hasProperty('revision') ? cs.revision :
+        cs.metaClass.hasProperty('changeNumber') ? cs.changeNumber : "" %></B> by
+          <B><%= cs.author %>: </B>
+          <B>(${cs.msgAnnotated})</B>
+         </TD>
+      </TR>
+<%	}
+
+	if(!hadChanges) { %>
+        <TR><TD colspan="2">No Changes</TD></TR>
+<%	} %>
+  </TABLE>
+<BR/>
+<% } %>
+<% } %>
+
+
+</BODY>
